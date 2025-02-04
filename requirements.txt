@@ -1,0 +1,13 @@
+Flask==3.1.0
+Flask-Migrate==4.1.0
+Flask-SQLAlchemy==3.1.1
+flask_swagger_ui==4.11.1
+SQLAlchemy==2.0.21
+psycopg2==2.9.10
+Celery==5.4.0
+Redis==5.2.1
+Twilio==9.4.4
+python-dateutil==2.9.0.post0
+pytz==2025.1
+gunicorn==23.0.0
+python-dotenv==1.0.1

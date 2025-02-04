@@ -1,0 +1,51 @@
+version: '3.8'
+volumes:
+  pg_data:
+
+services:
+  db:
+    image: postgres
+    restart: always
+    env_file: .env
+    ports:
+      - "5435:5432"
+    volumes:
+      - pg_data://var/lib/postgresql/data
+
+  app:
+    build: .
+    env_file: .env
+    command: >
+      sh -c "flask db upgrade && gunicorn -b 0.0.0.0:5000 wa_bot_reminder:app"
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+      - redis
+
+  redis:
+    image: redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  celery_worker:
+    build: .
+    command: celery -A wa_bot_reminder.tasks worker --loglevel=info
+    depends_on:
+      - redis
+      - db
+    env_file: .env
+    volumes:
+      - .:/app
+
+  celery_beat:
+    build: .
+    command: celery -A wa_bot_reminder.tasks beat --loglevel=info
+    env_file: .env
+    depends_on:
+      - redis
+      - db
+      - celery_worker
+    volumes:
+      - .:/app
