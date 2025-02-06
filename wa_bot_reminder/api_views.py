@@ -25,14 +25,12 @@ def webhook():
             user.tz = args.strip()
             db.session.commit()
             db.session.refresh(user)
-            return send_and_respond(
-                user,
-                f'Установлен часовой пояс UTC{"+" + str(user.tz) if user.tz >= 0 else user.tz}'
+            return Response(
+                f'Установлен часовой пояс UTC{"+" + str(user.tz) if user.tz >= 0 else user.tz}',
+                mimetype='text/plain'
             )
         elif command == 'список':
-            logger.info('вошёл в список')
             reminders = reminder_crud.get_multi(user_number=user.phone_number, session=db.session)
-            logger.info('получил напоминания')
             if reminders:
                 response_message = 'Ваши напоминания:\n'
                 for reminder in reminders:
@@ -43,21 +41,21 @@ def webhook():
                     )
             else:
                 response_message = 'У вас нет активных напоминаний.'
-            return send_whatsapp_message(user, response_message)
+            return Response(response_message, mimetype='text/plain')
         elif command == 'удали':
             reminder = reminder_crud.get(
                 obj_id=args.strip(), user_id=user.id, session=db.session
             )
             if reminder is None:
-                return send_and_respond(user, 'Напоминание не найдено')
+                return Response('Напоминание не найдено', mimetype='text/plain')
             reminder_crud.remove(reminder, db.session)
-            return send_and_respond(user, 'Напоминание удалено')
+            return Response('Напоминание удалено', mimetype='text/plain')
         elif command == 'напомни':
             if ";" not in args:
-                return send_and_respond(
-                    user,
+                return Response(
                     'Неверный формат.'
-                    ' Пример: "напомни 2025-02-04 14:30; Ваш текст"'
+                    ' Пример: "напомни 2025-02-04 14:30; Ваш текст"',
+                    mimetype='text/plain'
                 )
             time_str, text = args.split(";", 1)
             text = text.strip()
@@ -66,39 +64,34 @@ def webhook():
             remind_time = local_dt - timedelta(hours=user.tz)
             now = datetime.utcnow().replace(tzinfo=pytz.utc)
             if remind_time <= now:
-                return send_and_respond(user, 'Время должно быть в будущем!')
+                return Response('Время должно быть в будущем!', mimetype='text/plain')
             reminder = Reminder(user_id=user.id, remind_time=remind_time, text=text)
             db.session.add(reminder)
             db.session.commit()
             send_whatsapp_message.apply_async(args=[from_number, text], eta=remind_time)
-            return send_and_respond(
-                user,
+            return Response(
                 f'Напоминание запланировано на '
-                f'{(remind_time + timedelta(hours=user.tz)).strftime("%Y-%m-%d %H:%M")}'
+                f'{(remind_time + timedelta(hours=user.tz)).strftime("%Y-%m-%d %H:%M")}',
+                mimetype='text/plain'
             )
         if user.tz is None:
-            return send_and_respond(
-                user,
+            return Response(
                 'Установите ваш часовой пояс с помощью команды \n'
                 '"/set_timezone <разница от UTC> "\n'
-                'Пример: /set_timezone 3 (Москва)'
+                'Пример: /set_timezone 3 (Москва)',
+                mimetype='text/plain'
             )
-        return send_and_respond(
-            user,
+        return Response(
             'Для добавления напоминания: напомни <ISO время>: <текст>\n'
             'Для получения списка: список\n'
             'Для удаления напоминания: удали <id>\n'
-            'Для установки часового пояса: /set_timezone <разница от UTC>'
+            'Для установки часового пояса: /set_timezone <разница от UTC>',
+            mimetype='text/plain'
         )
     except Exception as e:
         db.session.rollback()
-        return Response("Внутренняя ошибка сервера", status=500)
+        return Response(f'Внутренняя ошибка сервера: {e}', status=500)
 
-
-def send_and_respond(user, message):
-    """Функция для мгновенного ответа пользователю"""
-    send_whatsapp_message.delay(user, message)
-    return Response(message, status=200)
 
 def get_or_create_user(phone_number, session):
     user = session.execute(select(User).where(
